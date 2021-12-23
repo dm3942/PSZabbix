@@ -1,11 +1,14 @@
-function New-ZbxHost 
+function New-Host
 {
     <#
     .SYNOPSIS
     Create a new host.
     
     .DESCRIPTION
-    Create a new host. 
+    Create a new host.
+    
+    Note: Use of the TLS options requires that the agent install also used the same TLS install parameters
+    i.e. msiexec /l*v log.txt /i zabbix_agent-5.4.8-windows-amd64-openssl.msi /qn SERVER=zabbix.foobar.com TLSCONNECT=psk TLSACCEPT=psk TLSPSKIDENTITY=PSKKEYG1 TLSPSKVALUE=559B6F386F7E5A0C017A3BFF6B0BD0973F4EDC38F8D52A61391A7BAA69A5982E
 
     .INPUTS
     This function does not take pipe input.
@@ -18,6 +21,10 @@ function New-ZbxHost
     hostid host                    name                                        status
     ------ ----                    ----                                        ------
     10084  mynewhostname321        mynewhostname                               Enabled
+
+    PS> New-ZbxHost -Session $s -Name $_.Hostname -Status "Enabled" -Port 10050 -dns $FQDN -HostGroupId  $gid.groupid -TemplateId $tmplt.templateid -tls_connect 2 -tls_accept 2 -tls_psk_identity "PSKKEYG1" -tls_psk "559B6F386F7E5A0C017A3BFF6B0BD0973F4EDC38F8D52A61391A7BAA69A5982E"
+    ....
+    ....
 
     .NOTES
     Contrary to other New-* functions inside this module, this method does not take pipe input. 
@@ -75,7 +82,23 @@ function New-ZbxHost
 
         [parameter(Mandatory=$false)]
         # The ID of the proxy to use. Default is no proxy.
-        [int] $ProxyId
+        [int] $ProxyId,
+
+        [parameter(Mandatory=$false)]
+        # Type of secure connection. Equivalent agent install paramater is TLSCONNECT, 2 = PSK
+        [int] $tls_connect,
+        
+        [parameter(Mandatory=$false)]
+        # Type of secure connection. Equivalent agent install paramater is TLSACCEPT, 2 = PSK
+        [int] $tls_accept,
+
+        [parameter(Mandatory=$false)]
+        # Pre Shared Key identityname. Equivalent agent install paramater is TLSPSKIDENTITY
+        [string] $tls_psk_identity,
+        
+        [parameter(Mandatory=$false)]
+        # Pre Shared Key HASH. Equivalent agent install paramater is TLSPSK
+        [string] $tls_psk
     )
 
     $isIp = 0
@@ -111,8 +134,14 @@ function New-ZbxHost
         status = [int]$Status
         proxy_hostid = if ($ProxyId -eq $null) { "" } else { $ProxyId }
     }
+    if($tls_connect -ne $null)       { $prms["tls_connect"] = $tls_connect; }
+    if($tls_accept -ne $null)        { $prms["tls_accept"] = $tls_accept; }
+    if($tls_psk_identity -ne $null)  { $prms["tls_psk_identity"] = $tls_psk_identity; }
+    if($tls_psk -ne $null)           { $prms["tls_psk"] = $tls_psk; }
 
-    $r = Invoke-ZbxZabbixApi $session "host.create" $prms
-    Get-ZbxHost -session $s -Id $r.hostids
+    try {
+    $r = Invoke-ZabbixApi $session "host.create" $prms
+    } catch { "Failed to create new host" }
+    Get-Host -session $s -Id $r.hostids
 }
 
